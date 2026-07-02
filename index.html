@@ -160,10 +160,10 @@
       </div>
       <div>
         <div class="word">HELLOFRESH</div>
-        <div class="eyebrow">Excellence Portal</div>
+        <div class="eyebrow">Case Management</div>
       </div>
       <div class="title-block">
-        <h1>Case Management Console</h1>
+        <h1>Global Case Volume</h1>
         <div class="sub">ESS / MSS &nbsp;·&nbsp; HR-266126</div>
       </div>
     </div>
@@ -223,12 +223,12 @@
     <div class="card">
       <h3>Case volume trend</h3>
       <div class="desc">Cases opened vs. closed, by month.</div>
-      <div class="chart-wrap"><canvas id="volumeChart"></canvas></div>
+      <div class="chart-wrap tall"><canvas id="volumeChart"></canvas></div>
     </div>
     <div class="card">
       <h3>MTTR trend</h3>
-      <div class="desc">Mean time to resolution (hrs), by close month. Dashed markers = CI launches.</div>
-      <div class="chart-wrap"><canvas id="mttrChart"></canvas></div>
+      <div class="desc">Bars = total resolution hours logged that month (left axis). Line = avg MTTR in hours (right axis). Amber markers = CI launches.</div>
+      <div class="chart-wrap tall"><canvas id="mttrChart"></canvas></div>
     </div>
   </div>
 
@@ -420,10 +420,31 @@ function init(){
     download: true,
     header: true,
     skipEmptyLines: true,
-    worker: true,
+    // The exported report has a few title/filter-criteria rows above the real
+    // header ("Case,Case Status,Case Category,..."). Strip anything above that
+    // line so header:true binds to the actual column names, not row 1.
+    beforeFirstChunk: function(chunk){
+      const lines = chunk.split(/\r\n|\n|\r/);
+      const headerIdx = lines.findIndex(l => l.indexOf("Case Status") !== -1 && l.indexOf("Case Category") !== -1);
+      if(headerIdx > 0){
+        return lines.slice(headerIdx).join("\n");
+      }
+      return chunk;
+    },
     complete: function(results){
       try{
+        if(results.errors && results.errors.length){
+          console.warn("CSV parse warnings:", results.errors.slice(0,5));
+        }
         RAW_ROWS = normalize(results.data);
+        if(RAW_ROWS.length === 0){
+          setSyncStatus(false, "Loaded 0 cases — check column headers");
+          showConfigBanner(
+            "<strong>Loaded the sheet but found 0 usable rows.</strong> This usually means the published CSV's header row doesn't match what the dashboard expects " +
+            "(e.g. \"Case\", \"Case Status\", \"Case Creation Date\"...). Open the CSV_URL directly in a browser tab and confirm the header row and column names match the <code>COL</code> mapping near the bottom of this file."
+          );
+          return;
+        }
         setSyncStatus(true, "Synced · " + RAW_ROWS.length.toLocaleString() + " cases · " + new Date().toLocaleString());
         populateFilterOptions();
         applyFilters();
@@ -576,22 +597,28 @@ function renderVolumeChart(){
   const closed = aggregateByMonth(ROWS, "resolvedMonth");
 
   const ctx = document.getElementById("volumeChart");
+  const lineStyle = (label, data, color) => ({
+    label, data, borderColor: color, backgroundColor: "#fff",
+    borderWidth: 3, tension: 0.35, cubicInterpolationMode: "monotone",
+    pointRadius: 4, pointBackgroundColor: "#fff", pointBorderColor: color, pointBorderWidth: 2,
+    pointHoverRadius: 5, fill: false
+  });
   const data = {
     labels: months.map(monthLabel),
     datasets: [
-      { label:"Opened", data: months.map(m=>opened[m]||0), backgroundColor: PALETTE.slate, borderRadius:3, barPercentage:0.7 },
-      { label:"Closed", data: months.map(m=>closed[m]||0), backgroundColor: PALETTE.teal, borderRadius:3, barPercentage:0.7 }
+      lineStyle("Opened", months.map(m=>opened[m]||0), PALETTE.slate),
+      lineStyle("Closed", months.map(m=>closed[m]||0), PALETTE.teal)
     ]
   };
   if(charts.volume){ charts.volume.data = data; charts.volume.options.plugins.ciMarkers.months = months; charts.volume.update(); return; }
   charts.volume = new Chart(ctx, {
-    type:"bar",
+    type:"line",
     data,
-    options: baseChartOptions({ stacked:false, ciMonths: months })
+    options: baseChartOptions({ ciMonths: months })
   });
 }
 
-/* ---------- MTTR trend ---------- */
+/* ---------- MTTR trend (bar = monthly effort hours, line = avg MTTR) ---------- */
 function renderMttrChart(){
   const months = monthRange(ROWS);
   const sums = {}, counts = {};
@@ -601,15 +628,35 @@ function renderMttrChart(){
       counts[r.resolvedMonth] = (counts[r.resolvedMonth]||0) + 1;
     }
   }
-  const avg = months.map(m => counts[m] ? +(sums[m]/counts[m]).toFixed(1) : null);
+  const effortHours = months.map(m => Math.round(sums[m]||0));
+  const avgMttr = months.map(m => counts[m] ? +(sums[m]/counts[m]).toFixed(1) : null);
 
   const ctx = document.getElementById("mttrChart");
   const data = {
     labels: months.map(monthLabel),
-    datasets: [{ label:"Avg TTR (hrs)", data: avg, borderColor: PALETTE.tealDeep, backgroundColor:"rgba(77,100,0,0.12)", fill:true, tension:0.3, pointRadius:2 }]
+    datasets: [
+      {
+        type: "bar", label: "Monthly effort (hrs)", data: effortHours,
+        backgroundColor: "rgba(100,116,139,0.35)", borderRadius: 3, barPercentage: 0.6,
+        yAxisID: "yEffort", order: 2
+      },
+      {
+        type: "line", label: "Avg MTTR (hrs)", data: avgMttr,
+        borderColor: PALETTE.tealDeep, backgroundColor: "#fff",
+        borderWidth: 3, tension: 0.35, cubicInterpolationMode: "monotone",
+        pointRadius: 4, pointBackgroundColor: "#fff", pointBorderColor: PALETTE.tealDeep, pointBorderWidth: 2,
+        pointHoverRadius: 5, fill: false, yAxisID: "yMttr", order: 1
+      }
+    ]
+  };
+  const options = baseChartOptions({ ciMonths: months });
+  options.scales = {
+    x: options.scales.x,
+    yMttr: { position:"left", grid:{color:PALETTE.grid}, ticks:{font:{size:11}}, beginAtZero:true, title:{display:true,text:"Avg MTTR (hrs)",font:{size:10.5}} },
+    yEffort: { position:"right", grid:{display:false}, ticks:{font:{size:11}}, beginAtZero:true, title:{display:true,text:"Effort (hrs)",font:{size:10.5}} }
   };
   if(charts.mttr){ charts.mttr.data = data; charts.mttr.options.plugins.ciMarkers.months = months; charts.mttr.update(); return; }
-  charts.mttr = new Chart(ctx, { type:"line", data, options: baseChartOptions({ ciMonths: months }) });
+  charts.mttr = new Chart(ctx, { type:"bar", data, options });
 }
 
 /* ---------- Cumulative effort ---------- */
