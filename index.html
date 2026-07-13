@@ -59,16 +59,21 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
 
 /* ---- Header ---- */
 .topbar { background: var(--hf-green-darker); color: #fff; padding: 0; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); border-bottom: 1px solid rgba(145,193,62,0.2); }
-.topbar-inner { max-width: 1400px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; height: 56px; gap: 12px; }
+.topbar-inner { max-width: 1400px; margin: 0 auto; padding: 16px 32px; display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .logo-icon { background: #06170f; padding: 6px; border-radius: 10px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; border: 1px solid rgba(145,193,62,0.3); }
-.logo-icon img { width: 22px; height: 22px; object-fit: contain; }
-.logo-lockup { display: flex; flex-direction: column; gap: 1px; }
+.logo-icon img { width: 24px; height: 24px; object-fit: contain; }
+.logo-lockup { display: flex; flex-direction: column; gap: 3px; }
 .logo-mark { font-weight: 800; font-size: 13px; letter-spacing: -0.02em; background: #fff; color: var(--hf-green-darker); padding: 2px 6px; border-radius: 3px; line-height: 1.1; align-self: flex-start; }
 .logo-mark span { color: var(--hf-green); }
 .topbar-title { font-size: 10px; font-weight: 600; color: var(--hf-green); text-transform: uppercase; letter-spacing: 0.08em; }
 .topbar-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
-.pill-btn { background: #06170f; border: 1px solid rgba(145,193,62,0.3); color: #fff; font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 5px; cursor: pointer; text-decoration: none; transition: background 0.15s; }
-.pill-btn:hover { background: #0a2417; border-color: rgba(145,193,62,0.6); }
+.btn-slack, .btn-idea { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none; transition: background 0.15s; }
+.btn-slack { background: #4A154B; color: #fff; }
+.btn-slack:hover { background: #611f69; }
+.btn-idea { background: #06170f; color: #F3F1E8; border: 1px solid rgba(145,193,62,0.3); }
+.btn-idea:hover { background: #0a2417; }
+.btn-slack svg { width: 14px; height: 14px; fill: currentColor; }
+.btn-idea img { width: 14px; height: 14px; filter: brightness(10); }
 
 /* ---- Hero band ---- */
 .hero { max-width: 1400px; margin: 0 auto; padding: 28px 24px 12px; }
@@ -177,9 +182,8 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
 .ci-tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: var(--line-soft); color: var(--ink-soft); }
 
 /* ---- Empty state ---- */
-.empty { text-align: center; padding: 60px 20px; color: var(--ink-faint); }
-.empty h2 { font-size: 18px; color: var(--ink-soft); margin-bottom: 8px; font-weight: 600; }
-.empty p { font-size: 13px; max-width: 440px; margin: 0 auto 16px; }
+.empty-banner { display: flex; align-items: center; gap: 10px; background: var(--warn-bg); color: var(--warn); border: 0.5px solid var(--warn); border-radius: 8px; padding: 10px 16px; font-size: 12.5px; margin-bottom: 20px; }
+.empty-banner.hidden { display: none; }
 
 /* ---- Footer ---- */
 .footer { max-width: 1400px; margin: 0 auto; padding: 24px; border-top: 0.5px solid var(--line); font-size: 11px; color: var(--ink-faint); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
@@ -203,8 +207,14 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
       <div class="topbar-title">People OPEX · Continuous Improvement</div>
     </div>
     <div class="topbar-actions">
-      <a class="pill-btn" href="#" id="slackBtn" target="_blank" rel="noopener">#pops-opex</a>
-      <a class="pill-btn" href="#" id="jiraBtn" target="_blank" rel="noopener">CI Intake</a>
+      <a class="btn-slack" href="#" id="slackBtn" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
+        <span>#pops-opex</span>
+      </a>
+      <a class="btn-idea" href="#" id="jiraBtn" target="_blank" rel="noopener">
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACgklEQVR4nKWSO4hVVxSGv7X3Pveccx8zF3zFJlpEozj4qFKIDFhpikCaIdFOSJFCsJGAEa4WKj4QRRGLdKKFFgkiYmNgTBlIQIYENRhtggnX0VHv45yz914WF53RTOcqF+tf/79YH3xgyaJdVUFEt57pfxyyfJOf86IymhXj1CRIWfieHXfTbjH95CHsNPhema+tEq57cYhZ4OpB1ZHNlpsXTzCKIXSQT2vcoMHO0AcR0EBEUQTN4TPzP5mqqKpRxeghmFzz7OtaEU9ljl9Ty2+AF4MVMGLR+RM6ajgsceIYP0jG1uJlpUWv54b9QRi+6j6PauoSyzsr169vYVijHgVwoDLZwT4C97ijPoZwT+p2D2WC0MaQY01OOVDCi396ImiEAG8XiE4fxgMe4E84seG4Nl3CN04Ys7i6RFMZm9h+kf7thEexyXf+GQHATRx5uUJMc1dZVabo98SXA/57+OCJS9KbiZOlzSXLXzDe2iUDNdpsjW3fSOf2XVYbxxejBI0mRZ/T0kpQ2gRaBG3zau4pw+ddVtnarXTZiojBUDXcuc+lAL7acrK/KjDXNTP75F8He41CmkFat9RkSJZKyMfGVWJ8QCQkKSFtNKrRe9X9vr/++O7+lT1DR80fB+Q8A/+lgUupjT+m9Xq3lrckay+Xatj72VqOuhbWOtMGUSDSUQMqshDdNx9dd1TvDEq2lcOK3M/ufnjqoysTx3V3WTF+/6BcWDg/4kBEuar2k19wfz3BR6Wf1gESTX3NoCozIpfnWZ43mydxSsKWbXiuSajhL4pA1kLSvBER0R1nNeWq2vfJfQfla1MS6KiZ+T75yRR862zsuswagMEsgSkJ7y94DWSnEblUgsg6AAAAAElFTkSuQmCC" alt="" />
+        <span>Got an idea?</span>
+      </a>
     </div>
   </div>
 </header>
@@ -253,12 +263,11 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
 </div>
 
 <div class="wrap">
-  <div id="emptyState" class="empty">
-    <h2>Load a case volume export to build the report</h2>
-    <p>This console reads the same published-CSV format as your OPEX and TL dashboards. Point it at the monthly Case Management sheet, or upload a CSV, and every section below populates automatically.</p>
+  <div id="emptyState" class="empty-banner">
+    <span>No data loaded yet — restoring your last dataset if one is saved, or pick a source above.</span>
   </div>
 
-  <div id="report" class="hidden">
+  <div id="report">
 
     <!-- SECTION 1: Core Performance & Volume -->
     <section class="section">
@@ -383,6 +392,73 @@ document.getElementById('loadUrlBtn').addEventListener('click', loadFromUrl);
 document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', loadFromFile);
 
+// ---- Persistence (IndexedDB) --------------------------------------------
+// Datasets here run 20-70MB as CSV text, well past localStorage's ~5-10MB
+// per-origin quota, so this uses IndexedDB instead. It remembers exactly one
+// dataset — the most recently loaded one — and restores it automatically on
+// the next visit. Every write replaces the previous entry, so "memory" is
+// always the single most recent upload or URL fetch, never stale beyond that.
+const IDB_NAME = 'essDashboardDB';
+const IDB_STORE = 'datasets';
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveLastDataset(csvText, sourceName) {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put({ csvText, sourceName, savedAt: Date.now() }, 'last');
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn('Could not persist this dataset for next visit:', e);
+  }
+}
+
+async function loadLastDataset() {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get('last');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('Could not read a previously saved dataset:', e);
+    return null;
+  }
+}
+
+// Restore whatever was last loaded, so the dashboard has content on open
+// without waiting for a fresh upload — and pre-fill the URL box if one was used.
+(async function restoreOnLoad() {
+  try {
+    const savedUrl = localStorage.getItem('essDashboardLastUrl');
+    if (savedUrl) document.getElementById('csvUrl').value = savedUrl;
+  } catch (e) {}
+
+  const last = await loadLastDataset();
+  if (last && last.csvText) {
+    setStatus('Restoring your last dataset (' + last.sourceName + ')…');
+    Papa.parse(last.csvText, {
+      header: true, skipEmptyLines: true,
+      complete: (res) => handleParsed(res, last.sourceName + ' (restored)'),
+      error: () => setStatus('Could not restore the last dataset — load a fresh one below.', 'err')
+    });
+  }
+})();
+
 function setStatus(msg, kind) {
   const el = document.getElementById('sourceStatus');
   el.textContent = msg;
@@ -393,10 +469,15 @@ function loadFromUrl() {
   const url = document.getElementById('csvUrl').value.trim();
   if (!url) { setStatus('Enter a published CSV URL first.', 'err'); return; }
   setStatus('Loading…');
-  Papa.parse(url, {
-    download: true, header: true, skipEmptyLines: true,
-    complete: (res) => handleParsed(res, 'URL'),
-    error: (err) => setStatus('Could not load URL: ' + err.message + ' — check the sheet is published to the web.', 'err')
+  fetch(url).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(text => {
+    parseAndLoad(text, 'URL', () => {
+      try { localStorage.setItem('essDashboardLastUrl', url); } catch(e) {}
+    });
+  }).catch(err => {
+    setStatus('Could not load URL: ' + err.message + ' — check the sheet is published to the web, or that your network allows this request.', 'err');
   });
 }
 
@@ -404,11 +485,25 @@ function loadFromFile(e) {
   const file = e.target.files[0];
   if (!file) return;
   setStatus('Reading ' + file.name + '…');
-  Papa.parse(file, {
+  const reader = new FileReader();
+  reader.onload = (evt) => parseAndLoad(evt.target.result, file.name);
+  reader.onerror = () => setStatus('Could not read that file.', 'err');
+  reader.readAsText(file);
+}
+
+// Shared entry point for both load paths: parses text, and on success both
+// renders the report and remembers this dataset (IndexedDB) so it survives
+// a page refresh — restored automatically next time the page opens.
+function parseAndLoad(text, sourceName, onSuccessExtra) {
+  Papa.parse(text, {
     header: true, skipEmptyLines: true,
-    // The Jira export carries 4 metadata rows before the header; if the header
-    // row isn't detected, retry with those skipped.
-    complete: (res) => handleParsed(res, file.name),
+    complete: (res) => {
+      const loaded = handleParsed(res, sourceName);
+      if (loaded) {
+        saveLastDataset(text, sourceName);
+        if (onSuccessExtra) onSuccessExtra();
+      }
+    },
     error: (err) => setStatus('Parse error: ' + err.message, 'err')
   });
 }
@@ -426,11 +521,12 @@ function handleParsed(res, sourceName) {
 
   if (!clean.length) {
     setStatus('No matching People-OPEX cases found. Is this the right export?', 'err');
-    return;
+    return false;
   }
   setStatus('Loaded ' + clean.length.toLocaleString() + ' cases from ' + sourceName + ' (filtered to People-OPEX categories).', 'ok');
   window.allRawRows = clean;
   initFilters(clean);
+  return true;
 }
 
 // ---- Filters (category / date range / team) -----------------------------
