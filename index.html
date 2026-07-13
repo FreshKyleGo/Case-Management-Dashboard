@@ -244,6 +244,12 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
       <div id="categoryChips"></div>
     </div>
     <div class="filter-group">
+      <label for="quickRange">Quick range</label>
+      <select id="quickRange">
+        <option value="">Custom / all time</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label for="dateFrom">From</label>
       <input type="date" id="dateFrom" />
     </div>
@@ -252,7 +258,7 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
       <input type="date" id="dateTo" />
     </div>
     <div class="filter-group">
-      <label for="teamFilter">Team</label>
+      <label for="teamFilter">Assignee team/squad</label>
       <select id="teamFilter"><option value="">All teams</option></select>
     </div>
     <div class="filter-actions">
@@ -376,7 +382,7 @@ const COL = {
   type: 'Case Type',
   created: 'Created Moment',
   resolvedDate: 'Last Resolved or Cancelled Date',
-  team: 'Service Team',
+  team: "Case Assignee's Team/Squad",
   mttr: 'Real Time to First Resolution/Cancellation in hours (including times out of work schedule)',
   slaTarget: 'Time to Resolve SLA Target',
   passFail: 'Passed or failed',
@@ -537,6 +543,7 @@ function initFilters(rows) {
   buildCategoryChips();
   buildTeamOptions();
   setDefaultDateRange(rows);
+  buildQuickRangeOptions(rows);
   document.getElementById('filterBar').classList.remove('hidden');
   applyFiltersAndRender();
 }
@@ -576,19 +583,109 @@ function buildTeamOptions() {
   sel.value = teamsInScope.includes(prev) ? prev : '';
 }
 
+// Format a Date using its LOCAL calendar date (not toISOString, which converts
+// to UTC first and can silently roll the date back a day for timezones ahead
+// of UTC — e.g. a Jun 13 04:23 Manila-time case would become "Jun 12" in UTC,
+// causing that entire day's cases to be dropped by the date filter).
+function toLocalDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function setDefaultDateRange(rows) {
   const dates = rows.map(r => parseDate(r[COL.created])).filter(Boolean);
   if (!dates.length) return;
   const min = new Date(Math.min(...dates));
   const max = new Date(Math.max(...dates));
-  document.getElementById('dateFrom').value = min.toISOString().slice(0,10);
-  document.getElementById('dateTo').value = max.toISOString().slice(0,10);
+  document.getElementById('dateFrom').value = toLocalDateInputValue(min);
+  document.getElementById('dateTo').value = toLocalDateInputValue(max);
 }
+
+// ---- Quick range presets (monthly / quarterly / half-year) --------------
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function buildQuickRangeOptions(rows) {
+  const dates = rows.map(r => parseDate(r[COL.created])).filter(Boolean);
+  const sel = document.getElementById('quickRange');
+  sel.innerHTML = '<option value="">Custom / all time</option>';
+  if (!dates.length) return;
+
+  const months = new Set(), quarters = new Set(), halves = new Set();
+  dates.forEach(d => {
+    const y = d.getFullYear(), m = d.getMonth() + 1; // 1-12
+    months.add(`${y}-${m}`);
+    quarters.add(`${y}-${Math.ceil(m/3)}`);
+    halves.add(`${y}-${m<=6?1:2}`);
+  });
+
+  const sortKey = s => { const [y,n] = s.split('-').map(Number); return y*100+n; };
+
+  const monthGroup = document.createElement('optgroup'); monthGroup.label = 'Monthly';
+  [...months].sort((a,b)=>sortKey(a)-sortKey(b)).forEach(key => {
+    const [y,m] = key.split('-').map(Number);
+    const opt = document.createElement('option');
+    opt.value = `month:${key}`;
+    opt.textContent = `${MONTH_NAMES[m-1]} ${y}`;
+    monthGroup.appendChild(opt);
+  });
+
+  const quarterGroup = document.createElement('optgroup'); quarterGroup.label = 'Quarterly';
+  [...quarters].sort((a,b)=>sortKey(a)-sortKey(b)).forEach(key => {
+    const [y,q] = key.split('-').map(Number);
+    const opt = document.createElement('option');
+    opt.value = `quarter:${key}`;
+    opt.textContent = `Q${q} ${y}`;
+    quarterGroup.appendChild(opt);
+  });
+
+  const halfGroup = document.createElement('optgroup'); halfGroup.label = 'Half-year';
+  [...halves].sort((a,b)=>sortKey(a)-sortKey(b)).forEach(key => {
+    const [y,h] = key.split('-').map(Number);
+    const opt = document.createElement('option');
+    opt.value = `half:${key}`;
+    opt.textContent = `H${h} ${y}`;
+    halfGroup.appendChild(opt);
+  });
+
+  sel.appendChild(monthGroup);
+  sel.appendChild(quarterGroup);
+  sel.appendChild(halfGroup);
+}
+
+function applyQuickRange(value) {
+  if (!value) {
+    setDefaultDateRange(window.allRawRows || []);
+    applyFiltersAndRender();
+    return;
+  }
+  const [type, key] = value.split(':');
+  const [year, idx] = key.split('-').map(Number);
+  let startMonth, monthSpan;
+  if (type === 'month')   { startMonth = idx - 1; monthSpan = 1; }
+  if (type === 'quarter') { startMonth = (idx - 1) * 3; monthSpan = 3; }
+  if (type === 'half')    { startMonth = (idx - 1) * 6; monthSpan = 6; }
+  const start = new Date(year, startMonth, 1);
+  const end = new Date(year, startMonth + monthSpan, 0); // last day of the range
+  document.getElementById('dateFrom').value = toLocalDateInputValue(start);
+  document.getElementById('dateTo').value = toLocalDateInputValue(end);
+  applyFiltersAndRender();
+}
+
+document.getElementById('quickRange').addEventListener('change', (e) => applyQuickRange(e.target.value));
+document.getElementById('dateFrom').addEventListener('input', () => { document.getElementById('quickRange').value = ''; });
+document.getElementById('dateTo').addEventListener('input', () => { document.getElementById('quickRange').value = ''; });
 
 function applyFiltersAndRender() {
   const rows = window.allRawRows || [];
-  const from = document.getElementById('dateFrom').value ? new Date(document.getElementById('dateFrom').value) : null;
-  const to = document.getElementById('dateTo').value ? new Date(document.getElementById('dateTo').value + 'T23:59:59') : null;
+  const fromVal = document.getElementById('dateFrom').value;
+  const toVal = document.getElementById('dateTo').value;
+  // Explicit T00:00:00/T23:59:59 (no "Z") forces LOCAL time parsing on both
+  // ends — a bare "YYYY-MM-DD" string parses as UTC midnight, which silently
+  // excludes early-morning local cases for any timezone ahead of UTC.
+  const from = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+  const to = toVal ? new Date(toVal + 'T23:59:59') : null;
   const team = document.getElementById('teamFilter').value;
 
   const filtered = rows.filter(r => {
@@ -615,6 +712,7 @@ document.getElementById('applyFiltersBtn').addEventListener('click', applyFilter
 document.getElementById('resetFiltersBtn').addEventListener('click', () => {
   activeCategories = new Set(KEEP_CATEGORIES);
   document.getElementById('teamFilter').value = '';
+  document.getElementById('quickRange').value = '';
   buildCategoryChips();
   buildTeamOptions();
   setDefaultDateRange(window.allRawRows || []);
