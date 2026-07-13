@@ -181,6 +181,25 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
 .ci-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .ci-tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: var(--line-soft); color: var(--ink-soft); }
 
+.ci-toggle {
+  display: flex; align-items: center; gap: 6px; margin-top: 14px; padding: 7px 0 0;
+  border: none; border-top: 0.5px solid var(--line); background: none; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: var(--hf-green-darker); width: 100%; text-align: left;
+}
+.ci-toggle:hover { color: var(--good); }
+.ci-toggle .chev { display: inline-block; transition: transform 0.15s; font-size: 10px; }
+.ci-toggle.open .chev { transform: rotate(90deg); }
+.ci-detail { display: none; margin-top: 10px; }
+.ci-detail.open { display: block; }
+.ci-detail-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ci-detail-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--ink-faint); font-weight: 600; padding: 5px 0; border-bottom: 1px solid var(--line);
+}
+.ci-detail-table td { padding: 6px 0; border-bottom: 0.5px solid var(--line-soft); }
+.ci-detail-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ci-detail-note { font-size: 11px; color: var(--ink-faint); margin-top: 8px; }
+
 /* ---- Empty state ---- */
 .empty-banner { display: flex; align-items: center; gap: 10px; background: var(--warn-bg); color: var(--warn); border: 0.5px solid var(--warn); border-radius: 8px; padding: 10px 16px; font-size: 12.5px; margin-bottom: 20px; }
 .empty-banner.hidden { display: none; }
@@ -930,20 +949,35 @@ function buildCI(data) {
   const cats = groupStats(rated, d=>d.category).filter(c=>c.total>=100).sort((a,b)=>b.avgMttr-a.avgMttr);
 
   const cards = [];
-  if (types[0]) cards.push(ciCard(1, `${types[0].key}`, [
-    ['Failure rate', types[0].failRate.toFixed(1)+'%'], ['Cases', fmt(types[0].total)], ['Avg MTTR', fmt(types[0].avgMttr)+'h']
-  ], `Highest-failing case type in scope. ${types[0].failRate.toFixed(0)}% of these breach SLA, signalling a process or ownership gap worth a DMAIC pass.`,
-    ['Process mapping','Ownership clarity','Intake redesign']));
+  if (types[0]) {
+    const subset = rated.filter(d => d.type === types[0].key);
+    const breakdown = groupStats(subset, d=>d.team).sort((a,b)=>b.total-a.total);
+    cards.push(ciCard(1, `${types[0].key}`, [
+      ['Failure rate', types[0].failRate.toFixed(1)+'%'], ['Cases', fmt(types[0].total)], ['Avg MTTR', fmt(types[0].avgMttr)+'h']
+    ], `Highest-failing case type in scope. ${types[0].failRate.toFixed(0)}% of these breach SLA, signalling a process or ownership gap worth a DMAIC pass.`,
+      ['Process mapping','Ownership clarity','Intake redesign'],
+      'Team breakdown', 'Team', breakdown));
+  }
 
-  if (teams[0]) cards.push(ciCard(2, `${teams[0].key}`, [
-    ['Failure rate', teams[0].failRate.toFixed(1)+'%'], ['Cases', fmt(teams[0].total)], ['Avg MTTR', fmt(teams[0].avgMttr)+'h']
-  ], `Team with the weakest SLA outcomes. Concentrated failures here suggest capacity, routing, or playbook issues rather than case-mix.`,
-    ['Capacity review','Routing rules','Playbook']));
+  if (teams[0]) {
+    const subset = rated.filter(d => d.team === teams[0].key);
+    const breakdown = groupStats(subset, d=>d.type).sort((a,b)=>b.total-a.total);
+    cards.push(ciCard(2, `${teams[0].key}`, [
+      ['Failure rate', teams[0].failRate.toFixed(1)+'%'], ['Cases', fmt(teams[0].total)], ['Avg MTTR', fmt(teams[0].avgMttr)+'h']
+    ], `Team with the weakest SLA outcomes. Concentrated failures here suggest capacity, routing, or playbook issues rather than case-mix.`,
+      ['Capacity review','Routing rules','Playbook'],
+      'Case type breakdown', 'Case type', breakdown));
+  }
 
-  if (cats[0]) cards.push(ciCard(3, `${cats[0].key}`, [
-    ['Avg MTTR', fmt(cats[0].avgMttr)+'h'], ['Cases', fmt(cats[0].total)], ['Fail rate', cats[0].failRate.toFixed(1)+'%']
-  ], `Longest average resolution among high-volume categories. Wide spread between fast and stalled cases points to inconsistent handling.`,
-    ['Standardize','Decision framework','Automation']));
+  if (cats[0]) {
+    const subset = rated.filter(d => d.category === cats[0].key);
+    const breakdown = groupStats(subset, d=>d.team).sort((a,b)=>b.total-a.total);
+    cards.push(ciCard(3, `${cats[0].key}`, [
+      ['Avg MTTR', fmt(cats[0].avgMttr)+'h'], ['Cases', fmt(cats[0].total)], ['Fail rate', cats[0].failRate.toFixed(1)+'%']
+    ], `Longest average resolution among high-volume categories. Wide spread between fast and stalled cases points to inconsistent handling.`,
+      ['Standardize','Decision framework','Automation'],
+      'Team breakdown', 'Team', breakdown));
+  }
 
   document.getElementById('ciGrid').innerHTML = cards.join('');
 }
@@ -956,14 +990,44 @@ function kpi(label, value, foot, cardCls='', footCls='') {
     <div class="kpi-foot ${footCls}">${foot}</div>
   </div>`;
 }
-function ciCard(rank, title, stats, desc, tags) {
+function ciCard(rank, title, stats, desc, tags, toggleLabel, breakdownDim, breakdown) {
+  const rows = (breakdown || []).slice(0, 8); // cap so a long tail doesn't blow out the card
+  const shown = rows.reduce((a,r)=>a+r.total, 0);
+  const total = (breakdown || []).reduce((a,r)=>a+r.total, 0);
+  const rowsHtml = rows.map(r => {
+    const cls = rateClass(r.failRate);
+    return `<tr>
+      <td>${r.key}</td>
+      <td class="num">${fmt(r.total)}</td>
+      <td class="num"><span class="badge ${cls}">${r.failRate.toFixed(1)}%</span></td>
+    </tr>`;
+  }).join('');
+  const note = total > shown
+    ? `<div class="ci-detail-note">Showing top ${rows.length} of ${(breakdown||[]).length} — ${fmt(total-shown)} more cases in smaller ${(breakdownDim||'group').toLowerCase()}s.</div>`
+    : '';
+  const detailId = `ci-detail-${rank}`;
   return `<div class="ci-card p${rank}">
     <div class="ci-rank">PRIORITY ${rank}</div>
     <div class="ci-title">${title}</div>
     <div class="ci-stats">${stats.map(s=>`<div class="ci-stat"><div class="ci-stat-val">${s[1]}</div><div class="ci-stat-lbl">${s[0]}</div></div>`).join('')}</div>
     <div class="ci-desc">${desc}</div>
     <div class="ci-tags">${tags.map(t=>`<span class="ci-tag">${t}</span>`).join('')}</div>
+    <button class="ci-toggle" data-target="${detailId}" onclick="toggleCiDetail(this)">
+      <span class="chev">▸</span><span>${toggleLabel || 'Breakdown'}</span>
+    </button>
+    <div class="ci-detail" id="${detailId}">
+      <table class="ci-detail-table">
+        <thead><tr><th>${breakdownDim || 'Group'}</th><th class="num">Cases</th><th class="num">Fail rate</th></tr></thead>
+        <tbody>${rowsHtml || '<tr><td colspan="3" style="color:var(--ink-faint);">No breakdown available.</td></tr>'}</tbody>
+      </table>
+      ${note}
+    </div>
   </div>`;
+}
+function toggleCiDetail(btn) {
+  const detail = document.getElementById(btn.getAttribute('data-target'));
+  const isOpen = detail.classList.toggle('open');
+  btn.classList.toggle('open', isOpen);
 }
 function groupStats(rows, keyFn) {
   const g = {};
