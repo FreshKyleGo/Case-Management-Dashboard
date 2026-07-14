@@ -166,6 +166,10 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
 .ticket-meta { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
 
 /* ---- CI recommendations ---- */
+.ci-lens { margin-bottom: 28px; }
+.ci-lens:last-child { margin-bottom: 0; }
+.ci-lens-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+.ci-lens-desc { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 14px; }
 .ci-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
 .ci-card { background: var(--card); border: 0.5px solid var(--line); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); border-top: 3px solid var(--hf-green); }
 .ci-card.p1 { border-top-color: var(--crit); }
@@ -174,6 +178,7 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
 .ci-rank { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink-faint); letter-spacing: 0.05em; }
 .ci-title { font-size: 16px; font-weight: 700; margin: 6px 0 10px; letter-spacing: -0.01em; }
 .ci-stats { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.ci-sample-warning { font-size: 11.5px; color: var(--warn); background: var(--warn-bg); border-radius: 6px; padding: 6px 10px; margin-bottom: 12px; }
 .ci-stat { }
 .ci-stat-val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ci-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
@@ -361,8 +366,25 @@ body { font-family: var(--font); background: var(--paper); color: var(--ink); li
     <!-- SECTION 4: CI Recommendations -->
     <section class="section">
       <div class="section-head"><span class="section-num">04</span><h2 class="section-title">CI initiative recommendations</h2></div>
-      <div class="section-desc">Data-derived candidates, ranked by failure rate and effort drain. Auto-generated from the loaded dataset.</div>
-      <div class="ci-grid" id="ciGrid"></div>
+      <div class="section-desc">Data-derived candidates by case type. No minimum volume floor — these are the real numbers, three different lenses on the same dataset.</div>
+
+      <div class="ci-lens">
+        <div class="ci-lens-title">Highest failure rate</div>
+        <div class="ci-lens-desc">Where SLA breaches concentrate, regardless of scale.</div>
+        <div class="ci-grid" id="ciGridFailRate"></div>
+      </div>
+
+      <div class="ci-lens">
+        <div class="ci-lens-title">Highest volume</div>
+        <div class="ci-lens-desc">Where the team spends the most case count, regardless of outcome.</div>
+        <div class="ci-grid" id="ciGridVolume"></div>
+      </div>
+
+      <div class="ci-lens">
+        <div class="ci-lens-title">Most hours lost to failures</div>
+        <div class="ci-lens-desc">Failed cases × average resolution time — volume, effort, and failure combined. The closest single number to "what's actually costing us."</div>
+        <div class="ci-grid" id="ciGridEffort"></div>
+      </div>
     </section>
 
   </div>
@@ -941,45 +963,37 @@ function buildBigTicket(data) {
 function buildCI(data) {
   const rated = data.filter(d => d.pf==='Passed' || d.pf==='Failed');
 
-  // Candidate 1: worst case TYPE by failure rate (min volume 50)
-  const types = groupStats(rated, d=>d.type).filter(t=>t.total>=50).sort((a,b)=>b.failRate-a.failRate);
-  // Candidate 2: worst TEAM by failure rate (min volume 50)
-  const teams = groupStats(rated, d=>d.team).filter(t=>t.total>=50).sort((a,b)=>b.failRate-a.failRate);
-  // Candidate 3: category with highest variability (biggest avg MTTR, min 100)
-  const cats = groupStats(rated, d=>d.category).filter(c=>c.total>=100).sort((a,b)=>b.avgMttr-a.avgMttr);
+  // No minimum volume floor — every case type in scope is a candidate.
+  // "Hours lost to failures" approximates using the group's overall avg MTTR,
+  // since we don't track failed-only resolution time separately.
+  const types = groupStats(rated, d=>d.type).map(t => ({...t, failedHours: t.fail * t.avgMttr}));
 
-  const cards = [];
-  if (types[0]) {
-    const subset = rated.filter(d => d.type === types[0].key);
+  const byFailRate = [...types].sort((a,b)=>b.failRate-a.failRate || b.total-a.total).slice(0,3);
+  const byVolume   = [...types].sort((a,b)=>b.total-a.total).slice(0,3);
+  const byEffort    = [...types].sort((a,b)=>b.failedHours-a.failedHours).slice(0,3);
+
+  renderCiLens('ciGridFailRate', byFailRate, rated, t =>
+    `${t.failRate.toFixed(1)}% of these breach SLA out of ${fmt(t.total)} cases — a process or ownership gap worth a DMAIC pass.`,
+    ['Process mapping','Ownership clarity','Intake redesign']);
+
+  renderCiLens('ciGridVolume', byVolume, rated, t =>
+    `${fmt(t.total)} cases in scope, the highest volume of any case type — even a small per-case efficiency gain compounds fast here.`,
+    ['Standardize','Self-service','Automation']);
+
+  renderCiLens('ciGridEffort', byEffort, rated, t =>
+    `~${fmt(t.failedHours)} hours tied up in cases that missed SLA (${fmt(t.fail)} failed of ${fmt(t.total)}, avg ${fmt(t.avgMttr)}h each) — the biggest recoverable effort on the board.`,
+    ['Capacity review','Routing rules','Playbook']);
+}
+
+function renderCiLens(gridId, items, rated, descFn, tags) {
+  const cards = items.map((item, i) => {
+    const subset = rated.filter(d => d.type === item.key);
     const breakdown = groupStats(subset, d=>d.team).sort((a,b)=>b.total-a.total);
-    cards.push(ciCard(1, `${types[0].key}`, [
-      ['Failure rate', types[0].failRate.toFixed(1)+'%'], ['Cases', fmt(types[0].total)], ['Avg MTTR', fmt(types[0].avgMttr)+'h']
-    ], `Highest-failing case type in scope. ${types[0].failRate.toFixed(0)}% of these breach SLA, signalling a process or ownership gap worth a DMAIC pass.`,
-      ['Process mapping','Ownership clarity','Intake redesign'],
-      'Team breakdown', 'Team', breakdown));
-  }
-
-  if (teams[0]) {
-    const subset = rated.filter(d => d.team === teams[0].key);
-    const breakdown = groupStats(subset, d=>d.type).sort((a,b)=>b.total-a.total);
-    cards.push(ciCard(2, `${teams[0].key}`, [
-      ['Failure rate', teams[0].failRate.toFixed(1)+'%'], ['Cases', fmt(teams[0].total)], ['Avg MTTR', fmt(teams[0].avgMttr)+'h']
-    ], `Team with the weakest SLA outcomes. Concentrated failures here suggest capacity, routing, or playbook issues rather than case-mix.`,
-      ['Capacity review','Routing rules','Playbook'],
-      'Case type breakdown', 'Case type', breakdown));
-  }
-
-  if (cats[0]) {
-    const subset = rated.filter(d => d.category === cats[0].key);
-    const breakdown = groupStats(subset, d=>d.team).sort((a,b)=>b.total-a.total);
-    cards.push(ciCard(3, `${cats[0].key}`, [
-      ['Avg MTTR', fmt(cats[0].avgMttr)+'h'], ['Cases', fmt(cats[0].total)], ['Fail rate', cats[0].failRate.toFixed(1)+'%']
-    ], `Longest average resolution among high-volume categories. Wide spread between fast and stalled cases points to inconsistent handling.`,
-      ['Standardize','Decision framework','Automation'],
-      'Team breakdown', 'Team', breakdown));
-  }
-
-  document.getElementById('ciGrid').innerHTML = cards.join('');
+    return ciCard(i+1, item.key, [
+      ['Failure rate', item.failRate.toFixed(1)+'%'], ['Cases', fmt(item.total)], ['Avg MTTR', fmt(item.avgMttr)+'h']
+    ], descFn(item), tags, 'Team breakdown', 'Team', breakdown, { idPrefix: gridId, sampleSize: item.total });
+  });
+  document.getElementById(gridId).innerHTML = cards.join('');
 }
 
 // ---- Small render helpers ----------------------------------------------
@@ -990,7 +1004,10 @@ function kpi(label, value, foot, cardCls='', footCls='') {
     <div class="kpi-foot ${footCls}">${foot}</div>
   </div>`;
 }
-function ciCard(rank, title, stats, desc, tags, toggleLabel, breakdownDim, breakdown) {
+function ciCard(rank, title, stats, desc, tags, toggleLabel, breakdownDim, breakdown, opts) {
+  opts = opts || {};
+  const idPrefix = opts.idPrefix || 'ci';
+  const sampleSize = opts.sampleSize;
   const rows = (breakdown || []).slice(0, 8); // cap so a long tail doesn't blow out the card
   const shown = rows.reduce((a,r)=>a+r.total, 0);
   const total = (breakdown || []).reduce((a,r)=>a+r.total, 0);
@@ -1005,11 +1022,15 @@ function ciCard(rank, title, stats, desc, tags, toggleLabel, breakdownDim, break
   const note = total > shown
     ? `<div class="ci-detail-note">Showing top ${rows.length} of ${(breakdown||[]).length} — ${fmt(total-shown)} more cases in smaller ${(breakdownDim||'group').toLowerCase()}s.</div>`
     : '';
-  const detailId = `ci-detail-${rank}`;
+  const detailId = `${idPrefix}-detail-${rank}`;
+  const sampleWarning = (sampleSize != null && sampleSize < 20)
+    ? `<div class="ci-sample-warning">⚠ Small sample — only ${fmt(sampleSize)} case${sampleSize===1?'':'s'}. A rate this size is noise, not a trend; don't act on it without more volume.</div>`
+    : '';
   return `<div class="ci-card p${rank}">
     <div class="ci-rank">PRIORITY ${rank}</div>
     <div class="ci-title">${title}</div>
     <div class="ci-stats">${stats.map(s=>`<div class="ci-stat"><div class="ci-stat-val">${s[1]}</div><div class="ci-stat-lbl">${s[0]}</div></div>`).join('')}</div>
+    ${sampleWarning}
     <div class="ci-desc">${desc}</div>
     <div class="ci-tags">${tags.map(t=>`<span class="ci-tag">${t}</span>`).join('')}</div>
     <button class="ci-toggle" data-target="${detailId}" onclick="toggleCiDetail(this)">
