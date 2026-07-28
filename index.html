@@ -139,6 +139,14 @@ body { font-family: var(--font); color: var(--ink); line-height: 1.5; -webkit-fo
 .chart-box { position: relative; height: 300px; }
 .chart-box.tall { height: 360px; }
 
+.ttr-row { display: grid; grid-template-columns: 32px 1fr 90px 90px 90px 100px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 0.5px solid var(--line-soft); }
+.ttr-row:last-child { border-bottom: none; }
+.ttr-row.head { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.ttr-rank { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink-faint); }
+.ttr-type { font-size: 13px; color: var(--ink); }
+.ttr-type .small-n { font-size: 10.5px; color: var(--warn); margin-left: 6px; font-weight: 600; }
+.ttr-num { font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ---- Tables ---- */
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-faint); padding: 8px 10px; border-bottom: 1px solid var(--line); }
@@ -384,6 +392,28 @@ body { font-family: var(--font); color: var(--ink); line-height: 1.5; -webkit-fo
         <div class="ci-lens-title">Most hours lost to failures</div>
         <div class="ci-lens-desc">Failed cases × average resolution time — volume, effort, and failure combined. The closest single number to "what's actually costing us."</div>
         <div class="ci-grid" id="ciGridEffort"></div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: Case Type Trends & TTR Ranking -->
+    <section class="section">
+      <div class="section-head"><span class="section-num">05</span><h2 class="section-title">Case type trends &amp; TTR ranking</h2></div>
+      <div class="section-desc">Monthly volume and resolution-time trend by case type, plus which case types breach SLA most often.</div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Volume &amp; TTR trend by case type</div>
+        <div class="card-sub">Select a case type to see its monthly case volume (bars) and average resolution time (line)</div>
+        <div class="filter-group" style="margin: 12px 0 14px; max-width:360px">
+          <label for="caseTypeSelect">Case type</label>
+          <select id="caseTypeSelect"></select>
+        </div>
+        <div class="chart-box tall"><canvas id="caseTypeTrendChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">TTR breach ranking by case type</div>
+        <div class="card-sub">Ranked by SLA breach rate, highest first. No minimum volume floor — small samples are flagged rather than hidden.</div>
+        <div id="ttrRankingTable"></div>
       </div>
     </section>
 
@@ -817,6 +847,8 @@ function buildReport(rows) {
   buildSla(data);
   buildBigTicket(data);
   buildCI(data);
+  buildCaseTypeTrends(data);
+  buildTtrRanking(data);
 }
 
 // ---- Section 1: Core performance & volume -------------------------------
@@ -1050,6 +1082,91 @@ function toggleCiDetail(btn) {
   const isOpen = detail.classList.toggle('open');
   btn.classList.toggle('open', isOpen);
 }
+// ---- Section 5a: Volume + TTR trend by case type -------------------------
+let caseTypeTrendData = null; // cached per buildReport() call, reused on dropdown change
+
+function buildCaseTypeTrends(data) {
+  const rated = data.filter(d => d.type);
+  const byType = groupStats(rated, d => d.type).sort((a, b) => b.total - a.total);
+  caseTypeTrendData = data;
+
+  const sel = document.getElementById('caseTypeSelect');
+  const prevValue = sel.value;
+  sel.innerHTML = byType.map(t => `<option value="${escapeAttr(t.key)}">${escapeHtmlText(t.key)} (${fmt(t.total)} cases)</option>`).join('');
+  // keep the user's selection across a data reload/filter change if it still exists, else default to top volume
+  if (prevValue && byType.some(t => t.key === prevValue)) sel.value = prevValue;
+
+  renderCaseTypeTrendChart(sel.value);
+}
+
+function renderCaseTypeTrendChart(selectedType) {
+  const data = caseTypeTrendData || [];
+  const subset = data.filter(d => d.type === selectedType);
+  const months = [...new Set(data.map(d => d.cMonth).filter(Boolean))].sort();
+
+  const volume = months.map(m => subset.filter(d => d.cMonth === m).length);
+  const avgTtr = months.map(m => {
+    const vals = subset.filter(d => d.cMonth === m && d.mttr != null).map(d => d.mttr);
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+  });
+
+  drawChart('caseTypeTrendChart', {
+    type: 'bar',
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [
+        { type: 'bar', label: 'Cases', data: volume, backgroundColor: HF.green, borderRadius: 4, categoryPercentage: 0.6, barPercentage: 0.85, yAxisID: 'y' },
+        { type: 'line', label: 'Avg TTR (hrs)', data: avgTtr, borderColor: HF.crit, backgroundColor: HF.crit + '18', fill: false, tension: 0.3, pointRadius: 4, pointBackgroundColor: HF.crit, borderWidth: 2, yAxisID: 'y1', spanGaps: true }
+      ]
+    },
+    options: {
+      ...baseOpts({ legend: true }),
+      scales: {
+        x: { grid: { color: HF.line, drawBorder: false }, ticks: { color: HF.ink, font: { size: 11 } } },
+        y: { position: 'left', grid: { color: HF.line, drawBorder: false }, ticks: { color: HF.ink, font: { size: 11 } }, beginAtZero: true, title: { display: true, text: 'Cases', color: HF.faint, font: { size: 10 } } },
+        y1: { position: 'right', grid: { display: false }, ticks: { color: HF.crit, font: { size: 11 } }, beginAtZero: true, title: { display: true, text: 'Avg TTR (hrs)', color: HF.crit, font: { size: 10 } } }
+      }
+    }
+  });
+}
+document.getElementById('caseTypeSelect').addEventListener('change', e => renderCaseTypeTrendChart(e.target.value));
+
+function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+function escapeHtmlText(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// ---- Section 5b: TTR breach ranking by case type --------------------------
+function buildTtrRanking(data) {
+  const rated = data.filter(d => d.pf === 'Passed' || d.pf === 'Failed');
+  const byType = groupStats(rated, d => d.type)
+    .map(t => {
+      const subset = rated.filter(d => d.type === t.key);
+      const slaVals = subset.filter(d => d.slaTarget != null).map(d => d.slaTarget);
+      const avgSla = slaVals.length ? Math.round(slaVals.reduce((a, b) => a + b, 0) / slaVals.length) : null;
+      return { ...t, avgSla };
+    })
+    .sort((a, b) => b.failRate - a.failRate);
+
+  const rows = byType.map((t, i) => {
+    const cls = rateClass(t.failRate);
+    const smallSample = t.total < 20 ? `<span class="small-n">⚠ n=${t.total}</span>` : '';
+    return `<div class="ttr-row">
+      <div class="ttr-rank">${i + 1}</div>
+      <div class="ttr-type">${escapeHtmlText(t.key)}${smallSample}</div>
+      <div class="ttr-num">${fmt(t.total)}</div>
+      <div class="ttr-num">${fmt(t.avgMttr)}h</div>
+      <div class="ttr-num">${t.avgSla != null ? fmt(t.avgSla) + 'h' : '—'}</div>
+      <div class="ttr-num"><span class="badge ${cls}">${t.failRate.toFixed(1)}%</span></div>
+    </div>`;
+  }).join('');
+
+  const head = `<div class="ttr-row head">
+    <div>#</div><div>Case type</div><div style="text-align:right">Cases</div>
+    <div style="text-align:right">Avg TTR</div><div style="text-align:right">Avg SLA target</div><div style="text-align:right">Breach rate</div>
+  </div>`;
+
+  document.getElementById('ttrRankingTable').innerHTML = head + (rows || '<div class="ttr-row"><div style="grid-column:1/-1;color:var(--ink-faint)">No data available.</div></div>');
+}
+
 function groupStats(rows, keyFn) {
   const g = {};
   rows.forEach(r => {
