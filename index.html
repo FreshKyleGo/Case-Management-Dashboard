@@ -96,6 +96,7 @@ body { font-family: var(--font); color: var(--ink); line-height: 1.5; -webkit-fo
 .source-status { font-size: 11px; color: var(--ink-faint); width: 100%; margin-top: 2px; }
 .source-status.ok { color: var(--good); }
 .source-status.err { color: var(--crit); }
+.source-status.warn { color: var(--warn); }
 
 /* ---- Filter bar ---- */
 .filter-bar { max-width: 1400px; margin: 12px auto 0; padding: 0 24px; }
@@ -264,6 +265,7 @@ body { font-family: var(--font); color: var(--ink); line-height: 1.5; -webkit-fo
     <input type="text" id="csvUrl" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" />
     <button class="btn-primary" id="loadUrlBtn">Load data</button>
     <button class="btn-ghost" id="uploadBtn">Upload file</button>
+    <button class="btn-ghost" id="refreshMonthlyBtn">Refresh 12 months</button>
     <input type="file" id="fileInput" class="file-hidden" accept=".csv" />
     <div class="source-status" id="sourceStatus">Paste your monthly published Google Sheet CSV link, or upload a file to begin.</div>
   </div>
@@ -466,6 +468,11 @@ const charts = {};
 document.getElementById('slackBtn').href = SLACK_URL;
 document.getElementById('jiraBtn').href = JIRA_INTAKE_URL;
 document.getElementById('loadUrlBtn').addEventListener('click', loadFromUrl);
+document.getElementById('refreshMonthlyBtn').addEventListener('click', () => {
+  loadFromMonthlyUrls().then(ok => {
+    if (!ok) setStatus('No monthly URLs are configured yet — fill in MONTHLY_URLS in the dashboard code once your 12 tabs are published.', 'err');
+  });
+});
 document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', loadFromFile);
 
@@ -517,6 +524,64 @@ async function loadLastDataset() {
   }
 }
 
+// ---- Monthly published sources -------------------------------------------
+// Fill in each month's published-CSV URL once that month's tab is published
+// in Sheets (File > Share > Publish to web > select the tab > format = CSV).
+// Leave a month blank ('') if it isn't published yet — the dashboard will
+// load whichever months ARE filled in and clearly say which ones are missing,
+// rather than failing outright.
+const MONTHLY_URLS = {
+  'January':   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=244808682&single=true&output=csv',
+  'February':  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1002&single=true&output=csv',
+  'March':     'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1003&single=true&output=csv',
+  'April':     'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1004&single=true&output=csv',
+  'May':       'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1005&single=true&output=csv',
+  'June':      'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1006&single=true&output=csv',
+  'July':      'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1007&single=true&output=csv',
+  'August':    'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1008&single=true&output=csv',
+  'September': 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1009&single=true&output=csv',
+  'October':   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1010&single=true&output=csv',
+  'November':  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1011&single=true&output=csv',
+  'December':  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTKwboUHJoXllactq2g5gHpqsf8rSMCWHiJrQPQlu65of219PpDhp0VjSsJi4M6CpF9xzvEIOaUL0vJ/pub?gid=1012&single=true&output=csv',
+};
+
+async function loadFromMonthlyUrls() {
+  const configured = Object.entries(MONTHLY_URLS).filter(([, url]) => url && url.trim());
+  if (configured.length === 0) return false; // not set up yet — let caller fall back
+
+  setStatus(`Loading ${configured.length} monthly source${configured.length===1?'':'s'}…`);
+
+  const results = await Promise.all(configured.map(([month, url]) =>
+    fetch(url)
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(text => ({ month, ok: true, text }))
+      .catch(err => ({ month, ok: false, error: err.message }))
+  ));
+
+  const succeeded = results.filter(r => r.ok);
+  const failed = results.filter(r => !r.ok);
+
+  if (succeeded.length === 0) {
+    setStatus('Could not load any monthly source — ' + failed.map(f => f.month + ': ' + f.error).join('; '), 'err');
+    return false;
+  }
+
+  const parsedPerMonth = await Promise.all(succeeded.map(r => new Promise(resolve => {
+    Papa.parse(r.text, { header: true, skipEmptyLines: true, complete: res => resolve(res.data) });
+  })));
+
+  const mergedRows = [];
+  parsedPerMonth.forEach(rows => mergedRows.push(...rows));
+
+  const sourceName = `${succeeded.length} monthly tab${succeeded.length===1?'':'s'}`;
+  const loaded = handleParsed({ data: mergedRows, meta: {} }, sourceName);
+
+  if (loaded && failed.length) {
+    setStatus(`Loaded ${succeeded.length} of ${configured.length} configured months. Missing/failed: ${failed.map(f => f.month).join(', ')}.`, 'warn');
+  }
+  return loaded;
+}
+
 // Restore whatever was last loaded, so the dashboard has content on open
 // without waiting for a fresh upload — and pre-fill the URL box if one was used.
 (async function restoreOnLoad() {
@@ -524,6 +589,13 @@ async function loadLastDataset() {
     const savedUrl = localStorage.getItem('essDashboardLastUrl');
     if (savedUrl) document.getElementById('csvUrl').value = savedUrl;
   } catch (e) {}
+
+  // Prefer the 12 hardcoded monthly sources if they're configured — this is
+  // the primary path once the Sheets side is set up. Falls through to the
+  // single-URL / cached-dataset behavior below only if monthly URLs aren't
+  // filled in yet, or every single one of them failed to load.
+  const monthlyLoaded = await loadFromMonthlyUrls();
+  if (monthlyLoaded) return;
 
   const last = await loadLastDataset();
   if (last && last.csvText) {
